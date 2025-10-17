@@ -210,8 +210,8 @@ void setup() {
   }
   else
   {
-    Serial.println("SD_MMC Card Mounted");
-    gfx->println("SD_MMC Card Mounted");
+    Serial.printf("SD_MMC Card Mounted, space usage: %llu / %llu MB\n", SD_MMC.usedBytes() / (1024 * 1024), SD_MMC.totalBytes() / (1024 * 1024));
+    gfx->printf("SD_MMC Card Mounted, space usage: %llu / %llu MB\n", SD_MMC.usedBytes() / (1024 * 1024), SD_MMC.totalBytes() / (1024 * 1024));
     gfx->flush();
     SD_MMC.mkdir(FOLDER_L1);
     listDir(SD_MMC, "/", 4);
