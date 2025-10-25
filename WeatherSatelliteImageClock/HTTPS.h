@@ -181,7 +181,7 @@ void https_fs_download(String uri, fs::FS &fs, String path) {
                   read = client->readBytes(file_buf, (remain > FILE_BUFFER_SIZE) ? FILE_BUFFER_SIZE : remain);
                   file.write(file_buf, read);
                   remain -= read;
-                  Serial.printf("read: %d, remain: %d\n", read, remain);
+                  // Serial.printf("read: %d, remain: %d\n", read, remain);
                 } else {
                   delay(10);
                 }

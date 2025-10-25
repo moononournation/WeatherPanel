@@ -4,6 +4,7 @@
 #include <HTTPClient.h>
 #include <NetworkClientSecure.h>
 
+/* https://www.nmc.cn/publish/satellite/fy4b-visible.htm */
 const char *rootCACertificate = R"string_literal(
 -----BEGIN CERTIFICATE-----
 MIIFjTCCA3WgAwIBAgIEGErM1jANBgkqhkiG9w0BAQsFADBWMQswCQYDVQQGEwJD
@@ -174,13 +175,17 @@ void https_fs_download(String uri, fs::FS &fs, String path) {
             if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
               int remain = https.getSize();
               int read = 0;
-              while (remain) {
+              int loop_count = 0;
+              while (remain && (loop_count < 1000)) {
                 if (client->available()) {
                   read = client->readBytes(file_buf, (remain > FILE_BUFFER_SIZE) ? FILE_BUFFER_SIZE : remain);
                   file.write(file_buf, read);
                   remain -= read;
                   // Serial.printf("read: %d, remain: %d\n", read, remain);
+                } else {
+                  delay(10);
                 }
+                ++loop_count;
               }
             }
           } else {
