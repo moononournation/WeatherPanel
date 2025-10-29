@@ -1,13 +1,15 @@
 const char *SSID_NAME = "YourAP";
 const char *SSID_PASSWORD = "PleaseInputYourPasswordHere";
-const long  gmtOffset_sec = 8 * 60 * 60;
+const long gmtOffset_sec = 8 * 60 * 60;
+
+/* 60 minutes delay, every 10 minutes */
 const char *SATELLITE_URL_TEMPLATE = "https://image.nmc.cn/product/%d/%02d/%02d/WXBL/medium/SEVP_NSMC_WXBL_FY4B_ETCC_ACHN_LNO_PY_%d%02d%02d%02d%02d00000.JPG";
 
-const char *FOLDER_L1 = "/fy4b";
-const char *FOLDER_L2_TEMPLATE = "/fy4b/%d";
-const char *FOLDER_L3_TEMPLATE = "/fy4b/%d/%02d";
-const char *FOLDER_L4_TEMPLATE = "/fy4b/%d/%02d/%02d";
-const char *IMAGE_TEMPLATE = "/fy4b/%d/%02d/%02d/%02d%02d.jpg";
+const char *SATELLITE_FOLDER_L1 = "/fy4b";
+const char *SATELLITE_FOLDER_L2_TEMPLATE = "/fy4b/%d";
+const char *SATELLITE_FOLDER_L3_TEMPLATE = "/fy4b/%d/%02d";
+const char *SATELLITE_FOLDER_L4_TEMPLATE = "/fy4b/%d/%02d/%02d";
+const char *SATELLITE_FILE_TEMPLATE = "/fy4b/%d/%02d/%02d/%02d%02d.jpg";
 
 #include <Arduino.h>
 
@@ -17,6 +19,8 @@ WiFiMulti WiFiMulti;
 
 char url[1024];
 char path[1024];
+time_t rounding_time;
+time_t next_download_satellite_time = 0;
 
 #include <SD_MMC.h>
 #define SD_CS 38
@@ -24,6 +28,7 @@ char path[1024];
 #define SD_SCK 41
 #define SD_MISO 40
 
+#include "FILESYSTEM.h"
 #include "HTTPS.h"
 #include "JPEG.h"
 
@@ -48,14 +53,16 @@ Arduino_Canvas *gfx = new Arduino_Canvas(
 
 // Not sure if NetworkClientSecure checks the validity date of the certificate.
 // Setting clock just to be sure...
-void setClock() {
+void setClock()
+{
   configTime(0, 0, "pool.ntp.org");
 
   Serial.print("Waiting for NTP time sync: ");
   gfx->print("Waiting for NTP time sync: ");
   gfx->flush();
   time_t nowSecs = time(nullptr);
-  while (nowSecs < 8 * 3600 * 2) {
+  while (nowSecs < 8 * 3600 * 2)
+  {
     delay(500);
     Serial.print(".");
     gfx->print(".");
@@ -86,66 +93,32 @@ int JPEGDraw(JPEGDRAW *pDraw)
   return 1;
 }
 
-void listDir(fs::FS &fs, const char *dirname, uint8_t levels) {
-  Serial.printf("Listing directory: %s\n", dirname);
-
-  File root = fs.open(dirname);
-  if (!root) {
-    Serial.println("Failed to open directory");
-    return;
-  }
-  if (!root.isDirectory()) {
-    Serial.println("Not a directory");
-    return;
-  }
-
-  File file = root.openNextFile();
-  while (file) {
-    if (file.isDirectory()) {
-      Serial.print("  DIR : ");
-      Serial.println(file.name());
-      if (levels) {
-        listDir(fs, file.path(), levels - 1);
-      }
-    } else {
-      Serial.print("  FILE: ");
-      Serial.print(file.name());
-      Serial.print("  SIZE: ");
-      Serial.println(file.size());
-      if (file.size() == 0) {
-        Serial.print("  REMOVE: ");
-        Serial.println(file.path());
-        fs.remove(file.path());
-      }
-    }
-    file = root.openNextFile();
-  }
-}
-
 char dateStr[32];
 char timeStr[6];
-void drawClock() {
-  time_t now;
-  time(&now);
-  now += gmtOffset_sec;
-  struct tm *tmLocal = localtime(&now);
-  char buffer[80]; // Buffer to store the formatted string
+void drawClock()
+{
+  time(&rounding_time);
+  rounding_time += gmtOffset_sec;
+  struct tm *tmLocal = localtime(&rounding_time);
   strftime(dateStr, sizeof(dateStr), "%Y %B %d, %A", tmLocal);
   strftime(timeStr, sizeof(timeStr), "%H:%M", tmLocal);
 
-  int i = 8 * 4; // show 8 hours timelapse
-  time_t timeRound15 = now / (15 * 60); // round to 15 minutes
-  timeRound15 *= (15 * 60);
-  timeRound15 -= 45 * 60; // satellite photo delayed 45 minutes
-  timeRound15 -= (i * 15 * 60);
+  rounding_time /= (15 * 60); // round to 15 minutes
+  rounding_time *= (15 * 60);
+  rounding_time -= 45 * 60; // satellite photo delayed 45 minutes
+  time_t minute_i = rounding_time - (8 * 60 * 60); // show 8 hours timelapse
   unsigned long startMs = millis();
-  while (i--) {
-    timeRound15 += (15 * 60);
-    struct tm *tmPast = localtime(&timeRound15);
-    sprintf(path, IMAGE_TEMPLATE, tmPast->tm_year + 1900, tmPast->tm_mon + 1, tmPast->tm_mday, tmPast->tm_hour, tmPast->tm_min);
+  while (minute_i < rounding_time)
+  {
+    struct tm *tmPast = localtime(&minute_i);
+
+    /* draw satellite image */
+    sprintf(path, SATELLITE_FILE_TEMPLATE, tmPast->tm_year + 1900, tmPast->tm_mon + 1, tmPast->tm_mday, tmPast->tm_hour, tmPast->tm_min);
     // Serial.println(path);
-    if (SD_MMC.exists(path)) {
-      if (jpeg.open(path, jpegOpenSD_MMC, jpegClose, jpegRead, jpegSeek, JPEGDraw)) {
+    if (SD_MMC.exists(path))
+    {
+      if (jpeg.open(path, jpegOpenSD_MMC, jpegClose, jpegRead, jpegSeek, JPEGDraw))
+      {
         jpeg.setPixelType(RGB565_LITTLE_ENDIAN);
         jpeg.setCropArea(220, 280, 640, 172); // requested area
         jpeg.decode(0 /* x */, 0 /* y */, 0 /* options */);
@@ -156,7 +129,7 @@ void drawClock() {
         gfx->setTextColor(RGB565_WHITE);
         gfx->print(path);
 
-        gfx->shade(10, 10, 268, 128, 0b1011110111110111);
+        gfx->shade(10, 10, 300, 128, 0b1011110111110111);
         gfx->setFont(u8g2_font_fub14_tf);
         gfx->setCursor(12, 28);
         gfx->setTextColor(RGB565_WHITE);
@@ -166,20 +139,25 @@ void drawClock() {
         gfx->setTextColor(RGB565_WHITE);
         gfx->print(timeStr);
         gfx->flush();
-      } else {
+      }
+      else
+      {
         Serial.print("error = ");
         Serial.println(jpeg.getLastError(), DEC);
       }
     }
+
+    minute_i += (15 * 60);
   }
   Serial.printf("Draw Image used: %d ms\n", millis() - startMs);
 }
 
-void setup() {
+void setup()
+{
   Serial.begin(115200);
   // Serial.setDebugOutput(true);
 
-  Serial.println("Weather Satellite Image");
+  Serial.println("Weather Satellite Image Clock");
 
   delay(2000); // wait 2 seconds
 
@@ -213,28 +191,23 @@ void setup() {
     Serial.printf("SD_MMC Card Mounted, space usage: %llu / %llu MB\n", SD_MMC.usedBytes() / (1024 * 1024), SD_MMC.totalBytes() / (1024 * 1024));
     gfx->printf("SD_MMC Card Mounted, space usage: %llu / %llu MB\n", SD_MMC.usedBytes() / (1024 * 1024), SD_MMC.totalBytes() / (1024 * 1024));
     gfx->flush();
-    SD_MMC.mkdir(FOLDER_L1);
     listDir(SD_MMC, "/", 4);
   }
 
   WiFi.mode(WIFI_STA);
   WiFiMulti.addAP(SSID_NAME, SSID_PASSWORD);
-  // WiFi.begin(SSID_NAME, SSID_PASSWORD);
 
   // wait for WiFi connection
   gfx->setTextColor(RGB565_YELLOW);
   Serial.print("Waiting for WiFi to connect...");
   gfx->print("Waiting for WiFi to connect...");
   gfx->flush();
-  while ((WiFiMulti.run() != WL_CONNECTED)) {
+  while ((WiFiMulti.run() != WL_CONNECTED))
+  {
     Serial.print(".");
     gfx->print(".");
     gfx->flush();
   }
-  // while (WiFi.status() != WL_CONNECTED) {
-  //   delay(500);
-  //   Serial.print(".");
-  // }
   Serial.println(" connected");
   gfx->println(" connected");
   gfx->flush();
@@ -243,30 +216,33 @@ void setup() {
   setClock();
 }
 
-time_t next_update_time = 0;
-void loop() {
-  time_t now;
-  time(&now);
-  if (now > next_update_time) {
+void loop()
+{
+  /* Check and download latest satellite image */
+  time(&rounding_time);
+  if (rounding_time > next_download_satellite_time)
+  {
     Serial.printf("ESP.getFreeHeap(): %d, ESP.getFreePsram(): %d\n", ESP.getFreeHeap(), ESP.getFreePsram());
-    now /= 15 * 60; // round to 15 minutes
-    now *= 15 * 60;
-    next_update_time = now + (15 * 60);
-    now -= 45 * 60; // satellite photo delayed 45 minutes
-    struct tm *tmGm = gmtime(&now);
+    rounding_time /= 15 * 60; // round to 15 minutes
+    rounding_time *= 15 * 60;
+    next_download_satellite_time = rounding_time + (15 * 60);
+    rounding_time -= 45 * 60; // satellite photo delayed 45 minutes
+    struct tm *tmGm = gmtime(&rounding_time);
     sprintf(url, SATELLITE_URL_TEMPLATE, tmGm->tm_year + 1900, tmGm->tm_mon + 1, tmGm->tm_mday, tmGm->tm_year + 1900, tmGm->tm_mon + 1, tmGm->tm_mday, tmGm->tm_hour, tmGm->tm_min);
 
-    now += gmtOffset_sec;
-    struct tm *tmLocal = gmtime(&now);
-    sprintf(path, FOLDER_L2_TEMPLATE, tmLocal->tm_year + 1900);
+    rounding_time += gmtOffset_sec;
+    struct tm *tmLocal = gmtime(&rounding_time);
+    SD_MMC.mkdir(SATELLITE_FOLDER_L1);
+    sprintf(path, SATELLITE_FOLDER_L2_TEMPLATE, tmLocal->tm_year + 1900);
     SD_MMC.mkdir(path);
-    sprintf(path, FOLDER_L3_TEMPLATE, tmLocal->tm_year + 1900, tmLocal->tm_mon + 1);
+    sprintf(path, SATELLITE_FOLDER_L3_TEMPLATE, tmLocal->tm_year + 1900, tmLocal->tm_mon + 1);
     SD_MMC.mkdir(path);
-    sprintf(path, FOLDER_L4_TEMPLATE, tmLocal->tm_year + 1900, tmLocal->tm_mon + 1, tmLocal->tm_mday);
+    sprintf(path, SATELLITE_FOLDER_L4_TEMPLATE, tmLocal->tm_year + 1900, tmLocal->tm_mon + 1, tmLocal->tm_mday);
     SD_MMC.mkdir(path);
     // Serial.println(path);
-    sprintf(path, IMAGE_TEMPLATE, tmLocal->tm_year + 1900, tmLocal->tm_mon + 1, tmLocal->tm_mday, tmLocal->tm_hour, tmLocal->tm_min);
-    if (!SD_MMC.exists(path)) {
+    sprintf(path, SATELLITE_FILE_TEMPLATE, tmLocal->tm_year + 1900, tmLocal->tm_mon + 1, tmLocal->tm_mday, tmLocal->tm_hour, tmLocal->tm_min);
+    if (!SD_MMC.exists(path))
+    {
       https_fs_download(url, SD_MMC, path);
     }
   }
