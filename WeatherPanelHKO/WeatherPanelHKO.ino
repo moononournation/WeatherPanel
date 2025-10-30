@@ -88,8 +88,8 @@ SPIClass hspi(HSPI);
 Arduino_DataBus *bus1 = new Arduino_ESP32QSPI(
     6 /* CS */, 7 /* SCK */, 8 /* D0 */, 9 /* D1 */, 10 /* D2 */, 11 /* D3 */, true /* is_shared_interface */);
 Arduino_GFX *g = new Arduino_ST77916(bus1, 12 /* RST */, 0 /* rotation */, true /* IPS */, 360 /* width */, 360 /* height */,
-                                        0 /* col offset 1 */, 0 /* row offset 1 */, 0 /* col offset 2 */, 0 /* row offset 2 */,
-                                        st77916_150_init_operations, sizeof(st77916_150_init_operations));
+                                     0 /* col offset 1 */, 0 /* row offset 1 */, 0 /* col offset 2 */, 0 /* row offset 2 */,
+                                     st77916_150_init_operations, sizeof(st77916_150_init_operations));
 #define CANVAS
 Arduino_Canvas *gfx1 = new Arduino_Canvas(
     360 /* width */, 360 /* height */, g);
@@ -166,15 +166,15 @@ void drawClock()
   strftime(timeStr, sizeof(timeStr), "%H:%M", tmLocal);
 
   bool shown_time = false;
-  rounding_time /= 60; // round to minute
-  rounding_time *= 60;
-  time_t minute_i = rounding_time - (3 * 60 * 60); // show 3 hours timelapse
+  rounding_time /= 30 * 60; // round to 30 minutes, LCM of 5, 6 and 10 minutes
+  rounding_time *= 30 * 60;
   unsigned long startMs = millis();
+
+  /* draw photo */
+  time_t minute_i = rounding_time - (3 * 60 * 60); // show 3 hours timelapse
   while (minute_i < rounding_time)
   {
     struct tm *tmPast = localtime(&minute_i);
-
-    /* draw photo */
     sprintf(path, PHOTO_FILE_TEMPLATE, tmPast->tm_year + 1900, tmPast->tm_mon + 1, tmPast->tm_mday, tmPast->tm_hour, tmPast->tm_min);
     // Serial.println(path);
     if (SD.exists(path))
@@ -202,8 +202,14 @@ void drawClock()
         Serial.println(jpeg.getLastError(), DEC);
       }
     }
+    minute_i += (5 * 60);
+  }
 
-    /* draw radar image */
+  /* draw radar image */
+  minute_i = rounding_time - (3 * 60 * 60); // show 3 hours timelapse
+  while (minute_i < rounding_time)
+  {
+    struct tm *tmPast = localtime(&minute_i);
     sprintf(path, RADAR_FILE_TEMPLATE, tmPast->tm_year + 1900, tmPast->tm_mon + 1, tmPast->tm_mday, tmPast->tm_hour, tmPast->tm_min);
     // Serial.println(path);
     if (SD.exists(path))
@@ -221,8 +227,14 @@ void drawClock()
         Serial.println(jpeg.getLastError(), DEC);
       }
     }
+    minute_i += (6 * 60);
+  }
 
-    /* draw satellite image */
+  /* draw satellite image */
+  minute_i = rounding_time - (3 * 60 * 60); // show 3 hours timelapse
+  while (minute_i < rounding_time)
+  {
+    struct tm *tmPast = localtime(&minute_i);
     sprintf(path, SATELLITE_FILE_TEMPLATE, tmPast->tm_year + 1900, tmPast->tm_mon + 1, tmPast->tm_mday, tmPast->tm_hour, tmPast->tm_min);
     // Serial.println(path);
     if (SD.exists(path))
@@ -240,8 +252,7 @@ void drawClock()
         Serial.println(jpeg.getLastError(), DEC);
       }
     }
-
-    minute_i += 60;
+    minute_i += (10 * 60);
   }
 
   if (!shown_time)
