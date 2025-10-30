@@ -185,11 +185,11 @@ void drawClock()
         jpeg.setCropArea(180, 44, 360, 360); // requested area
         jpeg.decode(0 /* x */, 0 /* y */, 0 /* options */);
         jpeg.close();
-        gfx1->setCursor(30, 145);
+        gfx1->setCursor(35, 145);
         gfx1->setTextColor(RGB565_BLACK);
         gfx1->setTextSize(10, 10, 2);
         gfx1->print(timeStr);
-        gfx1->setCursor(31, 146);
+        gfx1->setCursor(36, 146);
         gfx1->setTextColor(RGB565_WHITE);
         gfx1->setTextSize(10, 10, 4);
         gfx1->print(timeStr);
@@ -258,11 +258,11 @@ void drawClock()
   if (!shown_time)
   {
     gfx1->fillScreen(RGB565_NAVY);
-    gfx1->setCursor(30, 145);
+    gfx1->setCursor(35, 145);
     gfx1->setTextColor(RGB565_BLACK);
     gfx1->setTextSize(10, 10, 2);
     gfx1->print(timeStr);
-    gfx1->setCursor(31, 146);
+    gfx1->setCursor(36, 146);
     gfx1->setTextColor(RGB565_WHITE);
     gfx1->setTextSize(10, 10, 4);
     gfx1->print(timeStr);
