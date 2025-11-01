@@ -69,12 +69,11 @@ time_t next_download_photo_time = 0;
 time_t next_download_radar_time = 0;
 time_t next_download_satellite_time = 0;
 
-#include <SD.h>
+#include <SD_MMC.h>
 #define SD_CS 1
-#define SPI_MOSI 2
-#define SPI_SCK 3
-#define SPI_MISO 4
-SPIClass hspi(HSPI);
+#define SD_MOSI 2
+#define SD_SCK 3
+#define SD_MISO 4
 
 #include "FILESYSTEM.h"
 #include "HTTPS.h"
@@ -87,24 +86,27 @@ SPIClass hspi(HSPI);
 
 Arduino_DataBus *bus1 = new Arduino_ESP32QSPI(
     6 /* CS */, 7 /* SCK */, 8 /* D0 */, 9 /* D1 */, 10 /* D2 */, 11 /* D3 */, true /* is_shared_interface */);
-Arduino_GFX *g = new Arduino_ST77916(bus1, 12 /* RST */, 0 /* rotation */, true /* IPS */, 360 /* width */, 360 /* height */,
-                                     0 /* col offset 1 */, 0 /* row offset 1 */, 0 /* col offset 2 */, 0 /* row offset 2 */,
-                                     st77916_150_init_operations, sizeof(st77916_150_init_operations));
+Arduino_GFX *g = new Arduino_ST77916(
+    bus1, 12 /* RST */, 0 /* rotation */, true /* IPS */, 360 /* width */, 360 /* height */,
+    0 /* col offset 1 */, 0 /* row offset 1 */, 0 /* col offset 2 */, 0 /* row offset 2 */,
+    st77916_150_init_operations, sizeof(st77916_150_init_operations));
 #define CANVAS
 Arduino_Canvas *gfx1 = new Arduino_Canvas(
     360 /* width */, 360 /* height */, g);
 
 Arduino_DataBus *bus2 = new Arduino_ESP32QSPI(
     5 /* CS */, 7 /* SCK */, 8 /* D0 */, 9 /* D1 */, 10 /* D2 */, 11 /* D3 */, true /* is_shared_interface */);
-Arduino_GFX *gfx2 = new Arduino_ST77916(bus2, GFX_NOT_DEFINED /* RST */, 0 /* rotation */, true /* IPS */, 360 /* width */, 360 /* height */,
-                                        0 /* col offset 1 */, 0 /* row offset 1 */, 0 /* col offset 2 */, 0 /* row offset 2 */,
-                                        st77916_150_init_operations, sizeof(st77916_150_init_operations));
+Arduino_GFX *gfx2 = new Arduino_ST77916(
+    bus2, GFX_NOT_DEFINED /* RST */, 0 /* rotation */, true /* IPS */, 360 /* width */, 360 /* height */,
+    0 /* col offset 1 */, 0 /* row offset 1 */, 0 /* col offset 2 */, 0 /* row offset 2 */,
+    st77916_150_init_operations, sizeof(st77916_150_init_operations));
 
 Arduino_DataBus *bus3 = new Arduino_ESP32QSPI(
     13 /* CS */, 7 /* SCK */, 8 /* D0 */, 9 /* D1 */, 10 /* D2 */, 11 /* D3 */, true /* is_shared_interface */);
-Arduino_GFX *gfx3 = new Arduino_ST77916(bus3, GFX_NOT_DEFINED /* RST */, 0 /* rotation */, true /* IPS */, 360 /* width */, 360 /* height */,
-                                        0 /* col offset 1 */, 0 /* row offset 1 */, 0 /* col offset 2 */, 0 /* row offset 2 */,
-                                        st77916_150_init_operations, sizeof(st77916_150_init_operations));
+Arduino_GFX *gfx3 = new Arduino_ST77916(
+    bus3, GFX_NOT_DEFINED /* RST */, 0 /* rotation */, true /* IPS */, 360 /* width */, 360 /* height */,
+    0 /* col offset 1 */, 0 /* row offset 1 */, 0 /* col offset 2 */, 0 /* row offset 2 */,
+    st77916_150_init_operations, sizeof(st77916_150_init_operations));
 /*******************************************************************************
  * End of Arduino_GFX setting
  ******************************************************************************/
@@ -166,8 +168,8 @@ void drawClock()
   strftime(timeStr, sizeof(timeStr), "%H:%M", tmLocal);
 
   bool shown_time = false;
-  rounding_time /= 30 * 60; // round to 30 minutes, LCM of 5, 6 and 10 minutes
-  rounding_time *= 30 * 60;
+  rounding_time /= (30 * 60); // round to 30 minutes, LCM of 5, 6 and 10 minutes
+  rounding_time *= (30 * 60);
   unsigned long startMs = millis();
 
   /* draw photo */
@@ -177,9 +179,9 @@ void drawClock()
     struct tm *tmPast = localtime(&minute_i);
     sprintf(path, PHOTO_FILE_TEMPLATE, tmPast->tm_year + 1900, tmPast->tm_mon + 1, tmPast->tm_mday, tmPast->tm_hour, tmPast->tm_min);
     // Serial.println(path);
-    if (SD.exists(path))
+    if (SD_MMC.exists(path))
     {
-      if (jpeg.open(path, jpegOpenSD, jpegClose, jpegRead, jpegSeek, JPEGDraw1))
+      if (jpeg.open(path, jpegOpenSD_MMC, jpegClose, jpegRead, jpegSeek, JPEGDraw1))
       {
         jpeg.setPixelType(RGB565_LITTLE_ENDIAN);
         jpeg.setCropArea(180, 44, 360, 360); // requested area
@@ -212,9 +214,9 @@ void drawClock()
     struct tm *tmPast = localtime(&minute_i);
     sprintf(path, RADAR_FILE_TEMPLATE, tmPast->tm_year + 1900, tmPast->tm_mon + 1, tmPast->tm_mday, tmPast->tm_hour, tmPast->tm_min);
     // Serial.println(path);
-    if (SD.exists(path))
+    if (SD_MMC.exists(path))
     {
-      if (jpeg.open(path, jpegOpenSD, jpegClose, jpegRead, jpegSeek, JPEGDraw2))
+      if (jpeg.open(path, jpegOpenSD_MMC, jpegClose, jpegRead, jpegSeek, JPEGDraw2))
       {
         jpeg.setPixelType(RGB565_BIG_ENDIAN);
         jpeg.setCropArea(20, 20, 360, 360); // requested area
@@ -237,9 +239,9 @@ void drawClock()
     struct tm *tmPast = localtime(&minute_i);
     sprintf(path, SATELLITE_FILE_TEMPLATE, tmPast->tm_year + 1900, tmPast->tm_mon + 1, tmPast->tm_mday, tmPast->tm_hour, tmPast->tm_min);
     // Serial.println(path);
-    if (SD.exists(path))
+    if (SD_MMC.exists(path))
     {
-      if (jpeg.open(path, jpegOpenSD, jpegClose, jpegRead, jpegSeek, JPEGDraw3))
+      if (jpeg.open(path, jpegOpenSD_MMC, jpegClose, jpegRead, jpegSeek, JPEGDraw3))
       {
         jpeg.setPixelType(RGB565_BIG_ENDIAN);
         jpeg.setCropArea(192, 192, 360, 360); // requested area
@@ -267,7 +269,6 @@ void drawClock()
     gfx1->setTextSize(10, 10, 4);
     gfx1->print(timeStr);
     gfx1->flush();
-    shown_time = true;
   }
   Serial.printf("drawClock() used: %d ms\n", millis() - startMs);
 }
@@ -280,8 +281,6 @@ void setup()
   Serial.println("Weather Panel HKO");
 
   delay(2000); // wait 2 seconds
-
-  hspi.begin(SPI_SCK, SPI_MISO, SPI_MOSI);
 
   // Init Display
   Serial.println("gfx1->begin()");
@@ -326,7 +325,8 @@ void setup()
   WiFi.mode(WIFI_STA);
   WiFiMulti.addAP(SSID_NAME, SSID_PASSWORD);
 
-  if (!SD.begin(SD_CS, hspi, 80000000, "/root"))
+  SD_MMC.setPins(SD_SCK, SD_MOSI, SD_MISO);
+  if (!SD_MMC.begin("/root", true /* mode1bit */, false /* format_if_mount_failed */, SDMMC_FREQ_HIGHSPEED))
   {
     Serial.println("Card Mount Failed");
     delay(24 * 60 * 60 * 1000);
@@ -334,7 +334,7 @@ void setup()
   else
   {
     Serial.printf("SD_MMC Card Mounted, space usage: %llu / %llu MB\n", SD_MMC.usedBytes() / (1024 * 1024), SD_MMC.totalBytes() / (1024 * 1024));
-    listDir(SD, "/", 4);
+    listDir(SD_MMC, "/", 4);
     gfx1->setCursor(125, 145);
     gfx1->setTextColor(RGB565_GREEN);
     gfx1->print("SD");
@@ -375,18 +375,18 @@ void loop()
 
     rounding_time += gmtOffset_sec;
     struct tm *tmLocal = gmtime(&rounding_time);
-    SD.mkdir(PHOTO_FOLDER_L1);
+    SD_MMC.mkdir(PHOTO_FOLDER_L1);
     sprintf(path, PHOTO_FOLDER_L2_TEMPLATE, tmLocal->tm_year + 1900);
-    SD.mkdir(path);
+    SD_MMC.mkdir(path);
     sprintf(path, PHOTO_FOLDER_L3_TEMPLATE, tmLocal->tm_year + 1900, tmLocal->tm_mon + 1);
-    SD.mkdir(path);
+    SD_MMC.mkdir(path);
     sprintf(path, PHOTO_FOLDER_L4_TEMPLATE, tmLocal->tm_year + 1900, tmLocal->tm_mon + 1, tmLocal->tm_mday);
-    SD.mkdir(path);
+    SD_MMC.mkdir(path);
     // Serial.println(path);
     sprintf(path, PHOTO_FILE_TEMPLATE, tmLocal->tm_year + 1900, tmLocal->tm_mon + 1, tmLocal->tm_mday, tmLocal->tm_hour, tmLocal->tm_min);
-    if (!SD.exists(path))
+    if (!SD_MMC.exists(path))
     {
-      https_fs_download(url, SD, path);
+      https_fs_download(url, SD_MMC, path);
     }
   }
 
@@ -403,18 +403,18 @@ void loop()
     struct tm *tmLocal = gmtime(&rounding_time);
     sprintf(url, RADAR_URL_TEMPLATE, tmLocal->tm_year + 1900, tmLocal->tm_mon + 1, tmLocal->tm_mday, tmLocal->tm_hour, tmLocal->tm_min);
 
-    SD.mkdir(RADAR_FOLDER_L1);
+    SD_MMC.mkdir(RADAR_FOLDER_L1);
     sprintf(path, RADAR_FOLDER_L2_TEMPLATE, tmLocal->tm_year + 1900);
-    SD.mkdir(path);
+    SD_MMC.mkdir(path);
     sprintf(path, RADAR_FOLDER_L3_TEMPLATE, tmLocal->tm_year + 1900, tmLocal->tm_mon + 1);
-    SD.mkdir(path);
+    SD_MMC.mkdir(path);
     sprintf(path, RADAR_FOLDER_L4_TEMPLATE, tmLocal->tm_year + 1900, tmLocal->tm_mon + 1, tmLocal->tm_mday);
-    SD.mkdir(path);
+    SD_MMC.mkdir(path);
     // Serial.println(path);
     sprintf(path, RADAR_FILE_TEMPLATE, tmLocal->tm_year + 1900, tmLocal->tm_mon + 1, tmLocal->tm_mday, tmLocal->tm_hour, tmLocal->tm_min);
-    if (!SD.exists(path))
+    if (!SD_MMC.exists(path))
     {
-      https_fs_download(url, SD, path);
+      https_fs_download(url, SD_MMC, path);
     }
   }
 
@@ -423,27 +423,27 @@ void loop()
   if (rounding_time > next_download_satellite_time)
   {
     Serial.printf("ESP.getFreeHeap(): %d, ESP.getFreePsram(): %d\n", ESP.getFreeHeap(), ESP.getFreePsram());
-    rounding_time /= 10 * 60; // round to 10 minutes
-    rounding_time *= 10 * 60;
+    rounding_time /= (10 * 60); // round to 10 minutes
+    rounding_time *= (10 * 60);
     next_download_satellite_time = rounding_time + (10 * 60);
-    rounding_time -= 60 * 60; // satellite image delayed 60 minutes
+    rounding_time -= (60 * 60); // satellite image delayed 60 minutes
     struct tm *tmGm = gmtime(&rounding_time);
     sprintf(url, SATELLITE_URL_TEMPLATE, tmGm->tm_year + 1900, tmGm->tm_mon + 1, tmGm->tm_mday, tmGm->tm_hour, tmGm->tm_min);
 
     rounding_time += gmtOffset_sec;
     struct tm *tmLocal = gmtime(&rounding_time);
-    SD.mkdir(SATELLITE_FOLDER_L1);
+    SD_MMC.mkdir(SATELLITE_FOLDER_L1);
     sprintf(path, SATELLITE_FOLDER_L2_TEMPLATE, tmLocal->tm_year + 1900);
-    SD.mkdir(path);
+    SD_MMC.mkdir(path);
     sprintf(path, SATELLITE_FOLDER_L3_TEMPLATE, tmLocal->tm_year + 1900, tmLocal->tm_mon + 1);
-    SD.mkdir(path);
+    SD_MMC.mkdir(path);
     sprintf(path, SATELLITE_FOLDER_L4_TEMPLATE, tmLocal->tm_year + 1900, tmLocal->tm_mon + 1, tmLocal->tm_mday);
-    SD.mkdir(path);
+    SD_MMC.mkdir(path);
     // Serial.println(path);
     sprintf(path, SATELLITE_FILE_TEMPLATE, tmLocal->tm_year + 1900, tmLocal->tm_mon + 1, tmLocal->tm_mday, tmLocal->tm_hour, tmLocal->tm_min);
-    if (!SD.exists(path))
+    if (!SD_MMC.exists(path))
     {
-      https_fs_download(url, SD, path);
+      https_fs_download(url, SD_MMC, path);
     }
   }
 

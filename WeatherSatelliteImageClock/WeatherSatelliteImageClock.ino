@@ -2,7 +2,11 @@ const char *SSID_NAME = "YourAP";
 const char *SSID_PASSWORD = "PleaseInputYourPasswordHere";
 const long gmtOffset_sec = 8 * 60 * 60;
 
-/* 60 minutes delay, every 10 minutes */
+/**
+ * @brief Satellite image
+ * 45 minutes delay
+ * 15 minutes interval
+ */
 const char *SATELLITE_URL_TEMPLATE = "https://image.nmc.cn/product/%d/%02d/%02d/WXBL/medium/SEVP_NSMC_WXBL_FY4B_ETCC_ACHN_LNO_PY_%d%02d%02d%02d%02d00000.JPG";
 
 const char *SATELLITE_FOLDER_L1 = "/fy4b";
@@ -103,16 +107,15 @@ void drawClock()
   strftime(dateStr, sizeof(dateStr), "%Y %B %d, %A", tmLocal);
   strftime(timeStr, sizeof(timeStr), "%H:%M", tmLocal);
 
+  bool shown_time = false;
   rounding_time /= (15 * 60); // round to 15 minutes
   rounding_time *= (15 * 60);
-  rounding_time -= 45 * 60; // satellite photo delayed 45 minutes
-  time_t minute_i = rounding_time - (8 * 60 * 60); // show 8 hours timelapse
   unsigned long startMs = millis();
+  /* draw satellite image */
+  time_t minute_i = rounding_time - (8 * 60 * 60); // show 8 hours timelapse
   while (minute_i < rounding_time)
   {
     struct tm *tmPast = localtime(&minute_i);
-
-    /* draw satellite image */
     sprintf(path, SATELLITE_FILE_TEMPLATE, tmPast->tm_year + 1900, tmPast->tm_mon + 1, tmPast->tm_mday, tmPast->tm_hour, tmPast->tm_min);
     // Serial.println(path);
     if (SD_MMC.exists(path))
@@ -139,6 +142,7 @@ void drawClock()
         gfx->setTextColor(RGB565_WHITE);
         gfx->print(timeStr);
         gfx->flush();
+        shown_time = true;
       }
       else
       {
@@ -146,10 +150,23 @@ void drawClock()
         Serial.println(jpeg.getLastError(), DEC);
       }
     }
-
     minute_i += (15 * 60);
   }
-  Serial.printf("Draw Image used: %d ms\n", millis() - startMs);
+
+  if (!shown_time)
+  {
+    gfx->fillScreen(RGB565_NAVY);
+    gfx->setFont(u8g2_font_fub14_tf);
+    gfx->setCursor(12, 28);
+    gfx->setTextColor(RGB565_WHITE);
+    gfx->print(dateStr);
+    gfx->setFont(u8g2_font_logisoso92_tn);
+    gfx->setCursor(4, 130);
+    gfx->setTextColor(RGB565_WHITE);
+    gfx->print(timeStr);
+    gfx->flush();
+  }
+  Serial.printf("drawClock() used: %d ms\n", millis() - startMs);
 }
 
 void setup()
@@ -177,6 +194,9 @@ void setup()
   digitalWrite(GFX_BL, LOW);
 #endif
 
+  WiFi.mode(WIFI_STA);
+  WiFiMulti.addAP(SSID_NAME, SSID_PASSWORD);
+
   gfx->setTextColor(RGB565_ORANGE);
   SD_MMC.setPins(SD_SCK, SD_MOSI, SD_MISO);
   if (!SD_MMC.begin("/root", true /* mode1bit */, false /* format_if_mount_failed */, SDMMC_FREQ_HIGHSPEED))
@@ -193,9 +213,6 @@ void setup()
     gfx->flush();
     listDir(SD_MMC, "/", 4);
   }
-
-  WiFi.mode(WIFI_STA);
-  WiFiMulti.addAP(SSID_NAME, SSID_PASSWORD);
 
   // wait for WiFi connection
   gfx->setTextColor(RGB565_YELLOW);
@@ -218,15 +235,17 @@ void setup()
 
 void loop()
 {
+  drawClock();
+
   /* Check and download latest satellite image */
   time(&rounding_time);
   if (rounding_time > next_download_satellite_time)
   {
     Serial.printf("ESP.getFreeHeap(): %d, ESP.getFreePsram(): %d\n", ESP.getFreeHeap(), ESP.getFreePsram());
-    rounding_time /= 15 * 60; // round to 15 minutes
-    rounding_time *= 15 * 60;
+    rounding_time /= (15 * 60); // round to 15 minutes
+    rounding_time *= (15 * 60);
     next_download_satellite_time = rounding_time + (15 * 60);
-    rounding_time -= 45 * 60; // satellite photo delayed 45 minutes
+    rounding_time -= (45 * 60); // satellite image delayed 45 minutes
     struct tm *tmGm = gmtime(&rounding_time);
     sprintf(url, SATELLITE_URL_TEMPLATE, tmGm->tm_year + 1900, tmGm->tm_mon + 1, tmGm->tm_mday, tmGm->tm_year + 1900, tmGm->tm_mon + 1, tmGm->tm_mday, tmGm->tm_hour, tmGm->tm_min);
 
@@ -246,8 +265,6 @@ void loop()
       https_fs_download(url, SD_MMC, path);
     }
   }
-
-  drawClock();
 
   // Serial.println();
   // Serial.println("Waiting 5s before the next round...");
